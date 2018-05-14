@@ -1,21 +1,33 @@
 package com.nextremer.minarai.client;
 
 import android.support.annotation.NonNull;
+import android.util.Base64;
 import android.util.Log;
 
-import com.github.nkzawa.emitter.Emitter;
-import com.github.nkzawa.socketio.client.IO;
-import com.github.nkzawa.socketio.client.Socket;
-
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+
+import io.socket.client.IO;
+import io.socket.client.Socket;
+import io.socket.emitter.Emitter;
+import okhttp3.HttpUrl;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 /**
  * Client operations class.
@@ -41,7 +53,10 @@ public class MinaraiClient implements Closeable {
     private String clientId;                    // Client id.
     private String userId;                      // User id.
     private String deviceId;                    // Device id.
+    private String imageUrl;                    // Image URL.
     private boolean closed;                     // Closed flag.
+
+    private final OkHttpClient httpClient = new OkHttpClient(); // HTTP Client.
 
     /**
      * Constructor.
@@ -97,12 +112,15 @@ public class MinaraiClient implements Closeable {
         if(deviceId == null)
             throw new IllegalArgumentException("deviceId must not be null.");
 
+        this.opts = (opts != null) ? opts : DEFAULT_OPTIONS;
         this.applicationId = applicationId;
         this.applicationSecret = applicationSecret;
         this.clientId = clientId;
         this.userId = userId;
         this.deviceId = deviceId;
-        this.opts = (opts != null) ? opts : DEFAULT_OPTIONS;
+        this.imageUrl = this.opts.getSocketIoRootUrlOrDefault().replaceFirst("\\/$", "")
+                + "/" + this.opts.getApiVersionOrDefault()
+                + "/upload-image";
 
         listeners = new HashMap<>();
     }
@@ -310,6 +328,53 @@ public class MinaraiClient implements Closeable {
             return;
         }
 
+        // Get image data by URL form.
+        switch(event) {
+            case SYNC:
+                try {
+                    JSONObject body = data.getJSONObject("body");
+
+                    if("image".equals(body.getString("type"))) {
+
+                        JSONObject message = body.getJSONObject("message");
+                        String imageUrl = message.getString("imageUrl");
+                        String imageType = message.getString("imageType");
+
+                        String url = getImageUrl(imageUrl, imageType);
+                        message.put("url", url);
+                    }
+                }
+                catch(JSONException ex) {
+                }
+                catch(IOException ex) {
+                    Log.e(LOG_TAG, "Error while get image URL", ex);
+                }
+                break;
+
+            case MESSAGE:
+                try {
+                    JSONObject body = data.getJSONObject("body");
+
+                    if("image".equals(body.getString("type"))) {
+
+                        JSONArray messages = body.getJSONArray("messages");
+
+                        JSONObject message = messages.getJSONObject(0);
+                        String imageUrl = message.getString("imageUrl");
+                        String imageType = message.getString("imageType");
+
+                        String url = getImageUrl(imageUrl, imageType);
+                        message.put("url", url);
+                    }
+                }
+                catch(JSONException ex) {
+                }
+                catch(IOException ex) {
+                    Log.e(LOG_TAG, "Error while get image URL", ex);
+                }
+                break;
+        }
+
         // Notify event to listeners.
         List<MinaraiEventListener> list = listeners.get(event);
 
@@ -501,6 +566,111 @@ public class MinaraiClient implements Closeable {
         catch(JSONException ex) {
             Log.w(LOG_TAG, "sendCommand: " + ex);
             return false;
+        }
+    }
+
+    /**
+     * Upload image data.
+     *
+     * @param bytes   Bytes of image.
+     * @param off     Byte offset of content.
+     * @param len     Byte length of content.
+     * @param type    Image type. e.g. 'image/jpeg'
+     * @param options Options.
+     * @return Image URL.
+     * @throws IOException When communication error occurred.
+     */
+    public URL uploadImage(@NonNull byte[] bytes, int off, int len,
+                           @NonNull String type,
+                           @NonNull String fileName,
+                           MinaraiSendOptions options) throws IOException, JSONException {
+
+        if(bytes == null)
+            throw new IllegalArgumentException("file must not be null.");
+
+        if(type == null)
+            throw new IllegalArgumentException("type must not be null.");
+
+        if(fileName == null)
+            throw new IllegalArgumentException("fileName must not be null.");
+
+        MediaType mediaType = MediaType.parse(type);
+
+        if(mediaType == null)
+            throw new IOException("Can not parse media type: " + type);
+
+        MultipartBody.Builder formBuilder = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("applicationId", applicationId)
+                .addFormDataPart("applicationSecret", applicationSecret)
+                .addFormDataPart("clientId", clientId)
+                .addFormDataPart("userId", userId)
+                .addFormDataPart("deviceId", deviceId)
+                .addFormDataPart("file", fileName, RequestBody.create(mediaType, bytes, off, len));
+
+        if(options != null && options.getExtra() != null)
+            formBuilder.addFormDataPart("params", options.getExtra().toString());
+
+        RequestBody form = formBuilder.build();
+
+        Request request = new Request.Builder()
+                .url(imageUrl)
+                .post(form)
+                .build();
+
+        Response res = httpClient.newCall(request).execute();
+
+        JSONObject data = new JSONObject(res.body().string());
+        String message = data.getString("message"); //"ok" succeeded
+        String url = data.getString("url");
+
+        return new URL(url);
+    }
+
+    /**
+     * Get image data by URL form.
+     *
+     * @param url  Image URL.
+     * @param type Image Type.
+     * @return Image data.
+     * @throws IOException When communication error occurred.
+     */
+    private String getImageUrl(@NonNull String url, @NonNull String type) throws IOException {
+
+        if(url == null)
+            throw new IllegalArgumentException("url must not be null.");
+
+        if(type == null)
+            throw new IllegalArgumentException("type must not be null.");
+
+        if(opts.isGetImageByHeader()) {
+            Request request = new Request.Builder()
+                    .url(url)
+                    .get()
+                    .header("X-Minarai-Application-Id", applicationId)
+                    .header("X-Minarai-Application-Secret", applicationSecret)
+                    .header("X-Minarai-User-Id", userId)
+                    .build();
+
+            ResponseBody resBody = httpClient.newCall(request).execute().body();
+
+            return "data:" + type + "base64," + Base64.encodeToString(resBody.bytes(), Base64.DEFAULT);
+        }
+        else {
+            HttpUrl httpUrl = HttpUrl.parse(url).newBuilder()
+                    .addQueryParameter("applicationId", applicationId)
+                    .addQueryParameter("applicationSecret", applicationSecret)
+                    .addQueryParameter("userId", userId)
+                    .build();
+            Request request = new Request.Builder()
+                    .url(httpUrl)
+                    .get()
+                    .build();
+
+            ResponseBody resBody = httpClient.newCall(request).execute().body();
+
+            return "data:" + type + "base64," + Base64.encodeToString(resBody.bytes(), Base64.DEFAULT);
+//            return resBody.string();
         }
     }
 

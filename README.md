@@ -6,19 +6,19 @@ A SDK that enables you to connect minarai easily on Android.
 
 
 ## Requirement
-* [nkzawa-socket.io-client.java](https://github.com/aflegel/nkzawa-socket.io-client.java)
+* [socket.io-client-java](https://github.com/socketio/socket.io-client-java)
 
 ## Installation
 
 ### Maven
 ```
-@todo jcenter dependency
+@todo github dependency
 ```
 
 ### Gradle
 Add it as a gradle dependency for Android Studio, in build.gradle :
 ```
-@todo jcenter dependency
+@todo github dependency
 ```
 
 ## Usage

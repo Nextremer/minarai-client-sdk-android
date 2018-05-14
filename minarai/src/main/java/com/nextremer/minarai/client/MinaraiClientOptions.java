@@ -1,6 +1,6 @@
 package com.nextremer.minarai.client;
 
-import com.github.nkzawa.socketio.client.IO;
+import io.socket.client.IO;
 
 /**
  * Client options class.
