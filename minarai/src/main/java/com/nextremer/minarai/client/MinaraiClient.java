@@ -4,24 +4,11 @@ import android.support.annotation.NonNull;
 import android.util.Base64;
 import android.util.Log;
 
-import com.github.nkzawa.emitter.Emitter;
-import com.github.nkzawa.socketio.client.IO;
-import com.github.nkzawa.socketio.client.Socket;
-import com.squareup.okhttp.HttpUrl;
-import com.squareup.okhttp.MediaType;
-import com.squareup.okhttp.MultipartBuilder;
-import com.squareup.okhttp.OkHttpClient;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.RequestBody;
-import com.squareup.okhttp.Response;
-import com.squareup.okhttp.ResponseBody;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.Closeable;
-import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -29,6 +16,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+
+import io.socket.client.IO;
+import io.socket.client.Socket;
+import io.socket.emitter.Emitter;
+import okhttp3.HttpUrl;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 /**
  * Client operations class.
@@ -600,8 +599,8 @@ public class MinaraiClient implements Closeable {
         if(mediaType == null)
             throw new IOException("Can not parse media type: " + type);
 
-        MultipartBuilder formBuilder = new MultipartBuilder()
-                .type(MultipartBuilder.FORM)
+        MultipartBody.Builder formBuilder = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
                 .addFormDataPart("applicationId", applicationId)
                 .addFormDataPart("applicationSecret", applicationSecret)
                 .addFormDataPart("clientId", clientId)
