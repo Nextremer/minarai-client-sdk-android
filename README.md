@@ -10,15 +10,19 @@ A SDK that enables you to connect minarai easily on Android.
 
 ## Installation
 
-### Maven
+Add it as a gradle dependency for Android Studio, in build.gradle
 ```
-@todo github dependency
-```
+repositories {
+    ...
+    maven {
+        url "https://nextremer.github.io/minarai-client-sdk-android-maven/repository"
+    }
+}
 
-### Gradle
-Add it as a gradle dependency for Android Studio, in build.gradle :
-```
-@todo github dependency
+dependencies {
+	...
+    implementation 'com.nextremer:minarai-client-sdk-android:0.1.0'
+}
 ```
 
 ## Usage
